@@ -1,6 +1,6 @@
 """
 Pairs Trading Dashboard (Streamlit)
-Run with: streamlit run dashboard.py
+Run with: python -m streamlit run dashboard.py
 """
 
 import streamlit as st
@@ -13,44 +13,39 @@ from plotly.subplots import make_subplots
 # ─── 1. CONFIG & STYLING ────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Pairs Engine",
-    page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for a sleek, dark, non-corporate aesthetic
+# Clean, minimalist dark theme CSS
 st.markdown("""
 <style>
-    /* Main background and text */
     .stApp {
-        background-color: #0E1117;
-        color: #C9D1D9;
+        background-color: #0d1117;
+        color: #c9d1d9;
     }
-    /* Metric Cards */
     div[data-testid="metric-container"] {
-        background-color: #161B22;
-        border: 1px solid #30363D;
-        padding: 5% 10% 5% 10%;
-        border-radius: 10px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        background-color: #161b22;
+        border: 1px solid #30363d;
+        padding: 15px;
+        border-radius: 6px;
     }
-    /* Highlight neon green for positive, electric pink for negative */
     [data-testid="stMetricDelta"] > div:nth-child(1) {
-        color: #39FF14 !important; 
+        color: #56d364 !important; 
     }
     [data-testid="stMetricDelta"] > div:nth-child(2) {
-        color: #FF007F !important;
+        color: #f85149 !important;
     }
-    /* Hide Streamlit Branding */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
+    header {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
 DATA_DIR = "pairs_trading_data"
 
 # ─── 2. DATA LOADERS ────────────────────────────────────────────────────────────
-@st.cache_data(ttl=60) # Refreshes every 60 seconds
+@st.cache_data(ttl=60)
 def load_json(filename):
     path = os.path.join(DATA_DIR, filename)
     if os.path.exists(path):
@@ -65,7 +60,6 @@ def load_csv(filename):
         return pd.read_csv(path)
     return pd.DataFrame()
 
-# Load Data
 live_signals = load_json("live_signals.json")
 open_positions = load_json("open_positions.json")
 backtest_summary = load_csv("backtest_summary.csv")
@@ -75,7 +69,7 @@ if not signals_df.empty:
     signals_df["Date"] = pd.to_datetime(signals_df["Date"])
 
 # ─── 3. SIDEBAR ─────────────────────────────────────────────────────────────────
-st.sidebar.title("⚡ Quant Engine")
+st.sidebar.title("Quant Engine")
 st.sidebar.markdown("Real-time Nifty 100 Pairs Trading")
 st.sidebar.divider()
 
@@ -85,11 +79,12 @@ if open_positions and "positions" in open_positions:
     st.sidebar.caption(f"Last updated: {open_positions.get('generated_at', 'Unknown')[:16]}")
 else:
     st.sidebar.metric("Live Open P&L", "₹0")
+    st.sidebar.caption("No active positions.")
 
 # ─── 4. MAIN DASHBOARD ──────────────────────────────────────────────────────────
-st.title("📈 Active Market Intelligence")
+st.title("Market Intelligence")
 
-tab1, tab2, tab3 = st.tabs(["🟢 Live Radar & P&L", "🏆 Backtest Leaderboard", "🔬 Deep Dive Explorer"])
+tab1, tab2, tab3 = st.tabs(["Live Radar", "Historical Backtests", "Pair Explorer"])
 
 # --- TAB 1: LIVE RADAR ---
 with tab1:
@@ -100,46 +95,46 @@ with tab1:
         if open_positions and open_positions.get("positions"):
             pos_df = pd.DataFrame(open_positions["positions"])
             
-            # Format dataframe for display
             display_df = pos_df[["pair", "position", "open_pnl", "open_pnl_pct"]].copy()
             display_df.columns = ["Pair", "Side", "Unrealised P&L (₹)", "Return (%)"]
             
-            # Conditional formatting
             st.dataframe(
                 display_df.style.map(
-                    lambda x: 'color: #39FF14; font-weight: bold;' if x > 0 else 'color: #FF007F; font-weight: bold;',
+                    lambda x: 'color: #56d364;' if x > 0 else 'color: #f85149;',
                     subset=["Unrealised P&L (₹)", "Return (%)"]
                 ),
-                use_container_width=True,
+                width="stretch",
                 hide_index=True
             )
         else:
-            st.info("No open positions currently active. Waiting for signals...")
+            st.info("No open positions currently active.")
 
     with col2:
         st.subheader("Real-Time Signals")
         if live_signals and live_signals.get("signals"):
             sig_df = pd.DataFrame(live_signals["signals"])
             
+            # STRIP EMOJIS: Remove all non-ASCII characters from the signal column
+            sig_df["signal"] = sig_df["signal"].str.replace(r'[^\x00-\x7F]+', '', regex=True).str.strip()
+            
             def color_signal(val):
-                if "ENTRY" in val or "SHORT" in val: return 'background-color: rgba(57, 255, 20, 0.2);'
-                if "STOP" in val: return 'background-color: rgba(255, 0, 127, 0.2);'
-                if "EXIT" in val: return 'color: #FFD700;'
+                if "ENTRY" in val or "SHORT" in val: return 'color: #56d364;'
+                if "STOP" in val: return 'color: #f85149;'
+                if "EXIT" in val: return 'color: #e3b341;'
                 return ''
                 
             st.dataframe(
                 sig_df[["pair", "live_z", "signal"]].style.map(color_signal, subset=["signal"]),
-                use_container_width=True,
+                width="stretch",
                 hide_index=True
             )
         else:
-            st.warning("Run Phase 3 to generate live signals.")
+            st.info("No live signals found. Execute Phase 3 to generate data.")
 
 # --- TAB 2: BACKTEST LEADERBOARD ---
 with tab2:
-    st.subheader("Historical Strategy Performance")
+    st.subheader("Strategy Performance Summary")
     if not backtest_summary.empty:
-        # Format metrics beautifully
         format_dict = {
             'Total Return (%)': '{:.2f}%',
             'Ann. Return (%)': '{:.2f}%',
@@ -149,14 +144,13 @@ with tab2:
         }
         
         st.dataframe(
-            backtest_summary.style.format(format_dict)
-            .background_gradient(cmap='viridis', subset=['Sharpe Ratio'])
-            .background_gradient(cmap='RdYlGn', subset=['Ann. Return (%)']),
-            use_container_width=True,
-            height=600
+            backtest_summary.style.format(format_dict),
+            width="stretch",
+            height=600,
+            hide_index=True
         )
     else:
-        st.error("Backtest data missing. Run Phase 4.")
+        st.info("Backtest data missing. Please execute your Phase 4 script to generate 'backtest_summary.csv'.")
 
 # --- TAB 3: PAIR EXPLORER ---
 with tab3:
@@ -166,7 +160,6 @@ with tab3:
         
         pair_data = signals_df[signals_df["pair"] == selected_pair].copy()
         
-        # Build interactive Plotly chart
         fig = make_subplots(
             rows=3, cols=1, 
             shared_xaxes=True,
@@ -175,38 +168,36 @@ with tab3:
             row_heights=[0.4, 0.3, 0.3]
         )
         
-        # 1. Prices
+        # Prices
         fig.add_trace(go.Scatter(x=pair_data["Date"], y=pair_data["s1_price"] / pair_data["s1_price"].iloc[0], 
-                                 name=pair_data["t1"].iloc[0], line=dict(color="#00E5FF")), row=1, col=1)
+                                 name=pair_data["t1"].iloc[0], line=dict(color="#58a6ff", width=1.5)), row=1, col=1)
         fig.add_trace(go.Scatter(x=pair_data["Date"], y=pair_data["s2_price"] / pair_data["s2_price"].iloc[0], 
-                                 name=pair_data["t2"].iloc[0], line=dict(color="#FF9100")), row=1, col=1)
+                                 name=pair_data["t2"].iloc[0], line=dict(color="#8b949e", width=1.5)), row=1, col=1)
         
-        # 2. Spread
+        # Spread
         fig.add_trace(go.Scatter(x=pair_data["Date"], y=pair_data["spread"], 
-                                 name="Spread", line=dict(color="#B388FF")), row=2, col=1)
+                                 name="Spread", line=dict(color="#d2a8ff", width=1.5)), row=2, col=1)
         
-        # 3. Z-Score
+        # Z-Score
         fig.add_trace(go.Scatter(x=pair_data["Date"], y=pair_data["z_score"], 
-                                 name="Z-Score", line=dict(color="#E0E0E0")), row=3, col=1)
+                                 name="Z-Score", line=dict(color="#c9d1d9", width=1)), row=3, col=1)
         
-        # Add Threshold Lines to Z-Score
-        fig.add_hline(y=2.0, line_dash="dash", line_color="#39FF14", row=3, col=1, annotation_text="Entry")
-        fig.add_hline(y=-2.0, line_dash="dash", line_color="#39FF14", row=3, col=1)
-        fig.add_hline(y=0, line_dash="solid", line_color="#757575", row=3, col=1)
-        fig.add_hline(y=3.5, line_dash="dot", line_color="#FF007F", row=3, col=1, annotation_text="Stop Loss")
-        fig.add_hline(y=-3.5, line_dash="dot", line_color="#FF007F", row=3, col=1)
+        fig.add_hline(y=2.0, line_dash="dash", line_color="#56d364", line_width=1, row=3, col=1)
+        fig.add_hline(y=-2.0, line_dash="dash", line_color="#56d364", line_width=1, row=3, col=1)
+        fig.add_hline(y=0, line_dash="solid", line_color="#30363d", line_width=1, row=3, col=1)
+        fig.add_hline(y=3.5, line_dash="dot", line_color="#f85149", line_width=1, row=3, col=1)
+        fig.add_hline(y=-3.5, line_dash="dot", line_color="#f85149", line_width=1, row=3, col=1)
 
-        # Plot Long/Short signals as markers on the Z-score chart
         longs = pair_data[(pair_data["signal"] == 1) & (pair_data["signal"].shift(1) != 1)]
         shorts = pair_data[(pair_data["signal"] == -1) & (pair_data["signal"].shift(1) != -1)]
         
         fig.add_trace(go.Scatter(x=longs["Date"], y=longs["z_score"], mode="markers", 
-                                 marker=dict(symbol="triangle-up", size=10, color="#39FF14"), name="Long Spread"), row=3, col=1)
+                                 marker=dict(symbol="triangle-up", size=8, color="#56d364"), name="Long Spread"), row=3, col=1)
         fig.add_trace(go.Scatter(x=shorts["Date"], y=shorts["z_score"], mode="markers", 
-                                 marker=dict(symbol="triangle-down", size=10, color="#FF007F"), name="Short Spread"), row=3, col=1)
+                                 marker=dict(symbol="triangle-down", size=8, color="#f85149"), name="Short Spread"), row=3, col=1)
 
         fig.update_layout(
-            height=800, 
+            height=750, 
             template="plotly_dark",
             paper_bgcolor='rgba(0,0,0,0)',
             plot_bgcolor='rgba(0,0,0,0)',
@@ -215,6 +206,6 @@ with tab3:
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
         
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig)
     else:
-        st.warning("Generate signals (Phase 3) to view the explorer.")
+        st.info("Historical signals missing. Execute Phase 3 to generate data for the explorer.")
